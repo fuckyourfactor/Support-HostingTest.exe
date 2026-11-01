@@ -8,7 +8,7 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{C6D7A672-021B-4094-AFBF-AF32371130E8}</ProjectGuid>
-    <RootNamespace>HostingTestNative</RootNamespace>
+    <RootNamespace>HostingTest</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -36,8 +36,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <OutDir>$(ProjectDir)dist\$(Configuration)\Reconstructed\</OutDir>
-    <IntDir>$(ProjectDir).obj\$(Configuration)\Native\</IntDir>
+    <OutDir>$(ProjectDir)dist\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir).obj\$(Configuration)\</IntDir>
     <TargetName>HostingTest</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -45,8 +45,8 @@
     <Link><SubSystem>Windows</SubSystem><GenerateDebugInformation>true</GenerateDebugInformation></Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile><WarningLevel>Level4</WarningLevel><FunctionLevelLinking>true</FunctionLevelLinking><IntrinsicFunctions>true</IntrinsicFunctions><SDLCheck>true</SDLCheck><PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions><ConformanceMode>true</ConformanceMode><LanguageStandard>stdcpp17</LanguageStandard><MultiProcessorCompilation>true</MultiProcessorCompilation></ClCompile>
-    <Link><SubSystem>Windows</SubSystem><EnableCOMDATFolding>true</EnableCOMDATFolding><OptimizeReferences>true</OptimizeReferences><GenerateDebugInformation>true</GenerateDebugInformation></Link>
+    <ClCompile><WarningLevel>Level4</WarningLevel><FunctionLevelLinking>true</FunctionLevelLinking><IntrinsicFunctions>true</IntrinsicFunctions><SDLCheck>true</SDLCheck><PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions><ConformanceMode>true</ConformanceMode><LanguageStandard>stdcpp17</LanguageStandard><MultiProcessorCompilation>true</MultiProcessorCompilation><RuntimeLibrary>MultiThreaded</RuntimeLibrary></ClCompile>
+    <Link><SubSystem>Windows</SubSystem><EnableCOMDATFolding>true</EnableCOMDATFolding><OptimizeReferences>true</OptimizeReferences><GenerateDebugInformation>false</GenerateDebugInformation></Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="native\main.cpp" />
@@ -58,9 +58,4 @@
     <None Include="assets\raw\DIALOG\102\1033.bin" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="CopyExtractedResources" AfterTargets="Build">
-    <ItemGroup><ExtractedAssets Include="$(ProjectDir)assets\**\*" /></ItemGroup>
-    <Copy SourceFiles="@(ExtractedAssets)" DestinationFiles="@(ExtractedAssets->'$(OutDir)assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(ProjectDir)analysis\pe_metadata.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
-  </Target>
 </Project>

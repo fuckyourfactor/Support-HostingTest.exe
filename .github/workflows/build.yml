@@ -28,40 +28,36 @@ jobs:
         shell: pwsh
         run: msbuild HostingTest.sln /m /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
 
-      - name: Verify exact original executable
+      - name: Verify compiled executable
         shell: pwsh
         run: |
-          . (Join-Path $PWD 'tools/hash-utils.ps1')
-          $binary = 'dist/Release/Exact/HostingTest.exe'
-          if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing build output: $binary" }
-          $hash = Get-FileSha256 -LiteralPath $binary
-          $expected = 'dfd183ccccf82d684ed6e4952aa071c251419024c2bbb78755563009f9f62c81'
-          if ($hash -ne $expected) { throw "Unexpected original executable hash: $hash" }
-
-      - name: Package binaries and extracted assets
-        shell: pwsh
-        run: |
-          . (Join-Path $PWD 'tools/hash-utils.ps1')
-          New-Item -ItemType Directory -Force -Path 'release' | Out-Null
-          foreach ($flavor in @('Exact', 'Reconstructed')) {
-            $folder = "dist/Release/$flavor"
-            $binary = Join-Path $folder 'HostingTest.exe'
-            $assets = Join-Path $folder 'assets'
-            if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing executable: $binary" }
-            if (-not (Test-Path -LiteralPath $assets -PathType Container)) { throw "Missing assets: $assets" }
-            Compress-Archive -Path "$folder/*" -DestinationPath "release/HostingTest-$flavor.zip" -CompressionLevel Optimal -Force
-            Copy-Item -LiteralPath $binary -Destination "release/HostingTest-$flavor.exe" -Force
+          $binary = 'dist/Release/HostingTest.exe'
+          if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+            throw "Missing compiled executable: $binary"
           }
-          Get-ChildItem -LiteralPath 'release' -File | Sort-Object Name | ForEach-Object {
-            $hash = Get-FileSha256 -LiteralPath $_.FullName
-            "$hash  $($_.Name)"
-          } | Set-Content -LiteralPath 'release/SHA256SUMS.txt' -Encoding ascii
+
+      - name: Clear existing assets from this release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+        run: |
+          $existingRelease = gh release view "$env:RELEASE_TAG" --json assets 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $assets = ($existingRelease | ConvertFrom-Json).assets
+            foreach ($asset in $assets) {
+              gh release delete-asset "$env:RELEASE_TAG" "$($asset.name)" --yes
+              if ($LASTEXITCODE -ne 0) {
+                throw "Failed to remove previous release asset: $($asset.name)"
+              }
+            }
+          }
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           target_commitish: ${{ github.sha }}
-          files: release/*
+          files: dist/Release/HostingTest.exe
           fail_on_unmatched_files: true
           generate_release_notes: true

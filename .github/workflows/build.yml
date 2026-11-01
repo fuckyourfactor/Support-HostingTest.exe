@@ -40,6 +40,53 @@ jobs:
             throw "Missing compiled executable: $binary"
           }
 
+      - name: Compress executable with UPX 5.3.0 (LZMA)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $binary = 'dist/Release/HostingTest.exe'
+          $originalSize = (Get-Item -LiteralPath $binary).Length
+          $originalVersion = (Get-Item -LiteralPath $binary).VersionInfo
+          $backup = Join-Path $env:RUNNER_TEMP 'HostingTest-uncompressed.exe'
+          Copy-Item -LiteralPath $binary -Destination $backup -Force
+
+          $archive = Join-Path $env:RUNNER_TEMP 'upx-5.3.0-win64.zip'
+          $downloadUrl = 'https://github.com/upx/upx/releases/download/v5.3.0/upx-5.3.0-win64.zip'
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $archive
+          $expected = 'd127996c76615e431be810e9c8d2910dbe3dd400600c5c0c50276fc5a17a9705'
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "UPX download checksum mismatch: $actual" }
+
+          $tools = Join-Path $env:RUNNER_TEMP 'hostingtest-upx'
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
+          $upx = Join-Path $tools 'upx-5.3.0-win64/upx.exe'
+          if (-not (Test-Path -LiteralPath $upx -PathType Leaf)) { throw 'UPX executable not found' }
+
+          & $upx --best --lzma '--compress-icons=0' '--keep-resource=16' $binary
+          $packResult = $LASTEXITCODE
+          $valid = $packResult -eq 0
+          if ($valid) {
+            & $upx --test $binary
+            $valid = $LASTEXITCODE -eq 0
+          }
+          if ($valid) {
+            $packedVersion = (Get-Item -LiteralPath $binary).VersionInfo
+            $valid = ($packedVersion.FileVersion -eq $originalVersion.FileVersion) -and
+                     ($packedVersion.ProductName -eq $originalVersion.ProductName) -and
+                     ($packedVersion.FileDescription -eq $originalVersion.FileDescription) -and
+                     ($packedVersion.OriginalFilename -eq $originalVersion.OriginalFilename)
+          }
+          if ($valid) {
+            $packedSize = (Get-Item -LiteralPath $binary).Length
+            $valid = $packedSize -lt $originalSize
+          }
+          if (-not $valid) {
+            Copy-Item -LiteralPath $backup -Destination $binary -Force
+            Write-Warning 'UPX did not create a smaller, validated executable; keeping the uncompressed build.'
+          }
+          $finalSize = (Get-Item -LiteralPath $binary).Length
+          Write-Host "Executable size: $originalSize -> $finalSize bytes"
+
       - name: Remove outdated assets from existing release
         uses: actions/github-script@v9
         env:

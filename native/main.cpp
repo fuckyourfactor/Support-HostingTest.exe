@@ -4,10 +4,6 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <commctrl.h>
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <thread>
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Comctl32.lib")
@@ -24,28 +20,33 @@ HINSTANCE gInstance = nullptr;
 HBITMAP gLogo = nullptr;
 HICON gIcon = nullptr;
 
-void append(HWND dialog, int controlId, const std::wstring& message) {
-    const auto index = SendDlgItemMessageW(dialog, controlId, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(message.c_str()));
+void append(HWND dialog, int controlId, const wchar_t* message) {
+    const LRESULT index = SendDlgItemMessageW(dialog, controlId, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(message));
     if (index != LB_ERR && index != LB_ERRSPACE) {
         SendDlgItemMessageW(dialog, controlId, LB_SETTOPINDEX, static_cast<WPARAM>(index), 0);
     }
 }
 
-void report(HWND dialog, int controlId, const std::wstring& message) {
-    auto* value = new std::wstring(message);
-    if (!PostMessageW(dialog, kAppendMessage, static_cast<WPARAM>(controlId), reinterpret_cast<LPARAM>(value))) {
-        delete value;
+void report(HWND dialog, int controlId, const wchar_t* message) {
+    const SIZE_T bytes = static_cast<SIZE_T>(lstrlenW(message) + 1) * sizeof(wchar_t);
+    wchar_t* copy = static_cast<wchar_t*>(HeapAlloc(GetProcessHeap(), 0, bytes));
+    if (!copy) return;
+    lstrcpyW(copy, message);
+    if (!PostMessageW(dialog, kAppendMessage, static_cast<WPARAM>(controlId), reinterpret_cast<LPARAM>(copy))) {
+        HeapFree(GetProcessHeap(), 0, copy);
     }
 }
 
-std::wstring winSockError(int code) {
-    return L"Winsock error " + std::to_wstring(code);
+void reportError(HWND dialog, const wchar_t* prefix, int code) {
+    wchar_t message[128];
+    wsprintfW(message, L"%sWinsock error %d", prefix, code);
+    report(dialog, kLogId, message);
 }
 
 bool testLocalTcpListener(HWND dialog) {
-    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    const SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listener == INVALID_SOCKET) {
-        report(dialog, kLogId, L"TCP: unable to open socket: " + winSockError(WSAGetLastError()));
+        reportError(dialog, L"TCP: unable to open socket: ", WSAGetLastError());
         return false;
     }
     sockaddr_in address{};
@@ -57,16 +58,16 @@ bool testLocalTcpListener(HWND dialog) {
     if (ok) {
         report(dialog, kLogId, L"TCP: local port 34447 available for incoming connections.");
     } else {
-        report(dialog, kLogId, L"TCP: unable to listen on port 34447: " + winSockError(WSAGetLastError()));
+        reportError(dialog, L"TCP: unable to listen on port 34447: ", WSAGetLastError());
     }
     closesocket(listener);
     return ok;
 }
 
 bool testLocalUdpSocket(HWND dialog) {
-    SOCKET listener = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    const SOCKET listener = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (listener == INVALID_SOCKET) {
-        report(dialog, kLogId, L"UDP: unable to open socket: " + winSockError(WSAGetLastError()));
+        reportError(dialog, L"UDP: unable to open socket: ", WSAGetLastError());
         return false;
     }
     sockaddr_in address{};
@@ -77,14 +78,14 @@ bool testLocalUdpSocket(HWND dialog) {
     if (ok) {
         report(dialog, kLogId, L"UDP: local port 34447 available.");
     } else {
-        report(dialog, kLogId, L"UDP: unable to bind port 34447: " + winSockError(WSAGetLastError()));
+        reportError(dialog, L"UDP: unable to bind port 34447: ", WSAGetLastError());
     }
     closesocket(listener);
     return ok;
 }
 
 void testRemoteTcp(HWND dialog, DWORD ipAddress) {
-    SOCKET connection = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    const SOCKET connection = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (connection == INVALID_SOCKET) {
         report(dialog, kLogId, L"Remote TCP: socket initialization failed.");
         return;
@@ -95,7 +96,7 @@ void testRemoteTcp(HWND dialog, DWORD ipAddress) {
     remote.sin_family = AF_INET;
     remote.sin_port = htons(kOriginalTestPort);
     remote.sin_addr.s_addr = htonl(ipAddress);
-    int result = connect(connection, reinterpret_cast<sockaddr*>(&remote), sizeof(remote));
+    const int result = connect(connection, reinterpret_cast<sockaddr*>(&remote), sizeof(remote));
     const int initialError = WSAGetLastError();
     bool ok = result == 0;
     if (!ok && initialError == WSAEWOULDBLOCK) {
@@ -113,7 +114,16 @@ void testRemoteTcp(HWND dialog, DWORD ipAddress) {
     closesocket(connection);
 }
 
-void runTest(HWND dialog, DWORD ipAddress) {
+struct TestArguments {
+    HWND dialog;
+    DWORD ipAddress;
+};
+
+DWORD WINAPI runTest(LPVOID context) {
+    TestArguments* args = static_cast<TestArguments*>(context);
+    const HWND dialog = args->dialog;
+    const DWORD ipAddress = args->ipAddress;
+    HeapFree(GetProcessHeap(), 0, args);
     WSADATA data{};
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
         report(dialog, kLogId, L"Unable to initialize Winsock.");
@@ -127,12 +137,13 @@ void runTest(HWND dialog, DWORD ipAddress) {
         WSACleanup();
     }
     PostMessageW(dialog, kFinishMessage, 0, 0);
+    return 0;
 }
 
 void configureLogo(HWND dialog) {
     gLogo = static_cast<HBITMAP>(LoadImageW(gInstance, MAKEINTRESOURCEW(129), IMAGE_BITMAP, 0, 0, LR_DEFAULTCOLOR));
     for (HWND child = FindWindowExW(dialog, nullptr, L"Static", nullptr); child; child = FindWindowExW(dialog, child, L"Static", nullptr)) {
-        auto style = static_cast<DWORD>(GetWindowLongPtrW(child, GWL_STYLE));
+        const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(child, GWL_STYLE));
         if ((style & SS_TYPEMASK) == SS_BITMAP && gLogo) {
             SendMessageW(child, STM_SETIMAGE, IMAGE_BITMAP, reinterpret_cast<LPARAM>(gLogo));
             break;
@@ -154,8 +165,11 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wparam, LPARAM lpa
         append(dialog, kLogId, L"TCP/UDP checks are illustrative, not the original protocol.");
         return TRUE;
     case kAppendMessage: {
-        std::unique_ptr<std::wstring> text(reinterpret_cast<std::wstring*>(lparam));
-        if (text) append(dialog, static_cast<int>(wparam), *text);
+        wchar_t* message = reinterpret_cast<wchar_t*>(lparam);
+        if (message) {
+            append(dialog, static_cast<int>(wparam), message);
+            HeapFree(GetProcessHeap(), 0, message);
+        }
         return TRUE;
     }
     case kFinishMessage:
@@ -172,9 +186,19 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wparam, LPARAM lpa
                 MessageBoxW(dialog, L"Enter a complete IPv4 address.", L"Hosting Tester", MB_OK | MB_ICONWARNING);
                 return TRUE;
             }
+            TestArguments* args = static_cast<TestArguments*>(HeapAlloc(GetProcessHeap(), 0, sizeof(TestArguments)));
+            if (!args) return TRUE;
+            args->dialog = dialog;
+            args->ipAddress = ipAddress;
+            const HANDLE thread = CreateThread(nullptr, 0, runTest, args, 0, nullptr);
+            if (!thread) {
+                HeapFree(GetProcessHeap(), 0, args);
+                MessageBoxW(dialog, L"Unable to start connection diagnostics.", L"Hosting Tester", MB_OK | MB_ICONERROR);
+                return TRUE;
+            }
+            CloseHandle(thread);
             EnableWindow(GetDlgItem(dialog, 2), FALSE);
             append(dialog, kLogId, L"Starting connection diagnostics...");
-            std::thread(runTest, dialog, ipAddress).detach();
             return TRUE;
         }
         }
@@ -201,6 +225,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (!handle) return 1;
     auto* templateData = static_cast<LPCDLGTEMPLATEW>(LockResource(handle));
     if (!templateData) return 1;
-    const auto result = DialogBoxIndirectParamW(instance, templateData, nullptr, dialogProc, 0);
+    const INT_PTR result = DialogBoxIndirectParamW(instance, templateData, nullptr, dialogProc, 0);
     return result < 0 ? 1 : static_cast<int>(result);
 }

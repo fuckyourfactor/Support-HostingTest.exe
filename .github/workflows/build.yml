@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
     runs-on: windows-2022
@@ -36,28 +40,45 @@ jobs:
             throw "Missing compiled executable: $binary"
           }
 
-      - name: Clear existing assets from this release
-        shell: pwsh
+      - name: Remove outdated assets from existing release
+        uses: actions/github-script@v9
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
-        run: |
-          $existingRelease = gh release view "$env:RELEASE_TAG" --json assets 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            $assets = ($existingRelease | ConvertFrom-Json).assets
-            foreach ($asset in $assets) {
-              gh release delete-asset "$env:RELEASE_TAG" "$($asset.name)" --yes
-              if ($LASTEXITCODE -ne 0) {
-                throw "Failed to remove previous release asset: $($asset.name)"
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = process.env.RELEASE_TAG;
+            let release;
+
+            try {
+              const result = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              release = result.data;
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`Release ${tag} does not exist yet; no assets to remove.`);
+                return;
               }
+              throw error;
             }
-          }
+
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: release.id,
+              per_page: 100
+            });
+
+            for (const asset of assets) {
+              core.info(`Removing old release asset: ${asset.name}`);
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+            }
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           target_commitish: ${{ github.sha }}
           files: dist/Release/HostingTest.exe
           fail_on_unmatched_files: true
+          overwrite_files: true
           generate_release_notes: true

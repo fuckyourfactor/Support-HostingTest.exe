@@ -19,7 +19,7 @@
   <ImportGroup Label="Shared" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <NMakeBuildCommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)tools\build-exact.ps1&quot; -ProjectRoot &quot;$(ProjectDir)&quot; -Output &quot;$(ProjectDir)dist\$(Configuration)\Exact&quot;</NMakeBuildCommandLine>
+    <NMakeBuildCommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)tools\build-exact.ps1&quot; -Configuration $(Configuration)</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>$(NMakeBuildCommandLine)</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>if exist &quot;$(ProjectDir)dist\$(Configuration)\Exact&quot; rmdir /s /q &quot;$(ProjectDir)dist\$(Configuration)\Exact&quot;</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectDir)dist\$(Configuration)\Exact\HostingTest.exe</NMakeOutput>

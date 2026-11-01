@@ -1,22 +1,57 @@
-name: Build
+name: Build and Release
+
 on:
   push:
-  workflow_dispatch:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
 jobs:
-  build:
+  build-and-release:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: microsoft/setup-msbuild@v2
-      - name: Build release binaries
-        run: msbuild HostingTest.sln /m /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build x86 Release
         shell: pwsh
-      - name: Verify exact binary
+        run: msbuild HostingTest.sln /m /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
+
+      - name: Verify exact original executable
         shell: pwsh
         run: |
-          $hash = (Get-FileHash 'dist/Release/Exact/HostingTest.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne 'dfd183ccccf82d684ed6e4952aa071c251419024c2bbb78755563009f9f62c81') { throw "Unexpected binary hash: $hash" }
-      - uses: actions/upload-artifact@v4
+          $binary = 'dist/Release/Exact/HostingTest.exe'
+          if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing build output: $binary" }
+          $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = 'dfd183ccccf82d684ed6e4952aa071c251419024c2bbb78755563009f9f62c81'
+          if ($hash -ne $expected) { throw "Unexpected original executable hash: $hash" }
+
+      - name: Package binaries and extracted assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'release' | Out-Null
+          foreach ($flavor in @('Exact', 'Reconstructed')) {
+            $folder = "dist/Release/$flavor"
+            $binary = Join-Path $folder 'HostingTest.exe'
+            $assets = Join-Path $folder 'assets'
+            if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing executable: $binary" }
+            if (-not (Test-Path -LiteralPath $assets -PathType Container)) { throw "Missing assets: $assets" }
+            Compress-Archive -Path "$folder/*" -DestinationPath "release/HostingTest-$flavor.zip" -CompressionLevel Optimal -Force
+            Copy-Item -LiteralPath $binary -Destination "release/HostingTest-$flavor.exe" -Force
+          }
+          Get-ChildItem -LiteralPath 'release' -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -LiteralPath 'release/SHA256SUMS.txt' -Encoding ascii
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: HostingTest-Release
-          path: dist/Release
+          files: release/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

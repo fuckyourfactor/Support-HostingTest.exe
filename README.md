@@ -1,4 +1,4 @@
-# HostingTest (size-optimized)
+# HostingTest
 
 This repository contains only the **native, partially reconstructed** Win32 application. It does **not** include the original executable and is not a 1:1 reimplementation of its original network handshake.
 
@@ -31,9 +31,3 @@ git push origin v1.0.5
 ```
 
 Alternatively use **Actions → Build and Release → Run workflow**.
-
-## Limitations
-
-- UPX can increase startup overhead, trigger antivirus false positives, or interact poorly with certain environments. The compressed executable should be tested on Windows. If needed, omit the UPX step to publish the uncompressed build.
-- This environment cannot compile with Windows MSBuild, so there is no verified final executable size or successful runtime test here. The build and post-compression checks execute on GitHub Actions.
-- The extra extracted files in `assets/` are source references, not extra runtime dependencies. Only resources listed in `HostingTest.rc` are embedded.

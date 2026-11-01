@@ -158,12 +158,25 @@ void configureLogo(HWND dialog) {
 
 INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-    case WM_INITDIALOG:
+    case WM_INITDIALOG: {
+        RECT windowRect{};
+        MONITORINFO monitorInfo{sizeof(MONITORINFO)};
+        if (GetWindowRect(dialog, &windowRect) &&
+            GetMonitorInfoW(MonitorFromWindow(dialog, MONITOR_DEFAULTTONEAREST), &monitorInfo)) {
+            const RECT& work = monitorInfo.rcWork;
+            const int width = windowRect.right - windowRect.left;
+            const int height = windowRect.bottom - windowRect.top;
+            const int x = work.left + ((work.right - work.left) - width) / 2;
+            const int y = work.top + ((work.bottom - work.top) - height) / 2;
+            SetWindowPos(dialog, nullptr, x, y, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         configureLogo(dialog);
         SendDlgItemMessageW(dialog, kAddressId, IPM_SETADDRESS, 0, MAKEIPADDRESS(127, 0, 0, 1));
         append(dialog, kLogId, L"Native C++ reconstruction: original dialog assets loaded.");
         append(dialog, kLogId, L"TCP/UDP checks are illustrative, not the original protocol.");
         return TRUE;
+    }
     case kAppendMessage: {
         wchar_t* message = reinterpret_cast<wchar_t*>(lparam);
         if (message) {

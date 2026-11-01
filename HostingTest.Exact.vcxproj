@@ -24,6 +24,6 @@
     <NMakeCleanCommandLine>if exist &quot;$(ProjectDir)dist\$(Configuration)\Exact&quot; rmdir /s /q &quot;$(ProjectDir)dist\$(Configuration)\Exact&quot;</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectDir)dist\$(Configuration)\Exact\HostingTest.exe</NMakeOutput>
   </PropertyGroup>
-  <ItemGroup><None Include="original\HostingTest.exe" /><None Include="tools\build-exact.ps1" /></ItemGroup>
+  <ItemGroup><None Include="original\HostingTest.exe" /><None Include="tools\build-exact.ps1" /><None Include="tools\hash-utils.ps1" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

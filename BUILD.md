@@ -17,10 +17,10 @@ python tools/extract_assets.py original/HostingTest.exe assets
 To produce the exact binary package without Visual Studio, run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-exact.ps1 -Configuration Release
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build-exact.ps1 -Configuration Release
 ```
 
-The script resolves its project location from its own path and no longer accepts quoted directory paths from MSBuild; this fixes the `Test-Path : Illegal characters in path` failure on GitHub Actions.
+The script resolves its project location from its own path, avoiding quoted directory paths supplied by MSBuild. Both the script and the GitHub workflow use `tools/hash-utils.ps1`, which computes SHA-256 with the .NET cryptography APIs instead of relying on `Get-FileHash` being available in the PowerShell session.
 
 The original SHA-256 is `dfd183ccccf82d684ed6e4952aa071c251419024c2bbb78755563009f9f62c81`. `tools/build-exact.ps1` verifies this hash before and after copying.
 
@@ -28,17 +28,17 @@ The full resource inventory, string table, disassembly listing, PE metadata, and
 
 ## GitHub Releases
 
-`.github/workflows/build.yml` builds on `windows-2022` and publishes a GitHub Release **only when pushing a tag beginning with `v`**, such as `v1.0.0`. It does not upload GitHub Actions artifacts.
+The `.github/workflows/build.yml` workflow builds on `windows-2022` and publishes a GitHub Release automatically when pushing a tag beginning with `v`. It also supports manual execution with **Actions → Build and Release → Run workflow**, where `tag_name` must be set to the desired release tag (e.g. `v1.0.1`). There are no GitHub Actions artifacts.
 
 ```powershell
 git add .
-git commit -m "Fix exact build and publish GitHub releases"
-git tag v1.0.0
+git commit -m "Fix PowerShell hashing and release workflow"
 git push origin main
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
-Replace `main` with your branch name if different. Use a new tag if `v1.0.0` already exists. The workflow needs repository Actions enabled and permission to publish releases (`contents: write`, provided by the workflow; repository policies must also allow it).
+Replace `main` with your branch name if different. Use a new tag if a tag has already been released. The workflow needs repository Actions enabled and permission to publish releases (`contents: write`, provided by the workflow; repository policies must also allow it).
 
 Each GitHub Release contains:
 

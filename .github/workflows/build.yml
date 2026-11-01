@@ -1,4 +1,3 @@
-
 name: Build and Release
 
 on:
@@ -32,15 +31,17 @@ jobs:
       - name: Verify exact original executable
         shell: pwsh
         run: |
+          . (Join-Path $PWD 'tools/hash-utils.ps1')
           $binary = 'dist/Release/Exact/HostingTest.exe'
           if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing build output: $binary" }
-          $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+          $hash = Get-FileSha256 -LiteralPath $binary
           $expected = 'dfd183ccccf82d684ed6e4952aa071c251419024c2bbb78755563009f9f62c81'
           if ($hash -ne $expected) { throw "Unexpected original executable hash: $hash" }
 
       - name: Package binaries and extracted assets
         shell: pwsh
         run: |
+          . (Join-Path $PWD 'tools/hash-utils.ps1')
           New-Item -ItemType Directory -Force -Path 'release' | Out-Null
           foreach ($flavor in @('Exact', 'Reconstructed')) {
             $folder = "dist/Release/$flavor"
@@ -52,7 +53,7 @@ jobs:
             Copy-Item -LiteralPath $binary -Destination "release/HostingTest-$flavor.exe" -Force
           }
           Get-ChildItem -LiteralPath 'release' -File | Sort-Object Name | ForEach-Object {
-            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $hash = Get-FileSha256 -LiteralPath $_.FullName
             "$hash  $($_.Name)"
           } | Set-Content -LiteralPath 'release/SHA256SUMS.txt' -Encoding ascii
 

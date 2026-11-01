@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'hash-utils.ps1')
 
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $output = Join-Path $projectRoot "dist\$Configuration\Exact"
@@ -22,7 +23,7 @@ if (-not (Test-Path -LiteralPath $metadata -PathType Leaf)) {
     throw "PE metadata not found: $metadata"
 }
 
-$actual = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+$actual = (Get-FileSha256 -LiteralPath $exe)
 if ($actual -ne $expected) {
     throw "Original executable hash mismatch: $actual"
 }
@@ -37,7 +38,7 @@ Copy-Item -LiteralPath $assets -Destination $copiedAssets -Recurse -Force
 Copy-Item -LiteralPath $metadata -Destination (Join-Path $output 'pe_metadata.json') -Force
 
 $outputExe = Join-Path $output 'HostingTest.exe'
-$outputHash = (Get-FileHash -LiteralPath $outputExe -Algorithm SHA256).Hash.ToLowerInvariant()
+$outputHash = (Get-FileSha256 -LiteralPath $outputExe)
 if ($outputHash -ne $expected) {
     throw "Output binary validation failed: $outputHash"
 }
